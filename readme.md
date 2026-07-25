@@ -11,8 +11,8 @@ This repository is the **visual foundation** for that product: brand identity, d
 ## Sources used to build this system
 
 - **Base app screenshots** — the técnico ("technician") version of the platform, currently white-labeled as *"Avalia NR1"* (deep-navy theme). Morah rebrands this surface to the blackberry identity. Screens captured: Visão Geral (dashboard), Termos Aceito, Empresas, Setor, Cargos, Campanhas, Relatórios, Link de Avaliação, Comparar Relatórios, Modelos de Apresentação.
-- **GitHub — `4Him-Technology/Morah`** (https://github.com/4Him-Technology/Morah) — the product repo. It was **empty** at build time; the brand and system here were created from scratch per the brief. Re-explore it as it fills in.
-- **GitHub — `4Him-Technology/oliveira`** (https://github.com/4Him-Technology/oliveira) — a sibling 4Him product (the *Oliveira* medical-services site). Useful only as parent-company context: it confirmed the house preference for **Plus Jakarta Sans + Manrope** typography, which Morah adopts.
+- **GitHub — `MoorahLtda/Mentask`** (https://github.com/MoorahLtda/Mentask) — the product repo (this one). Moved here on 2026-07-25; it previously lived at `4Him-Technology/Morah`, which was **deleted** — Moorah and 4Him are separate companies and the code belongs under Moorah.
+- *(historical)* The typography choice — **Plus Jakarta Sans + Manrope** — was originally confirmed by a sibling product under the former parent company. Kept as the house preference; no live dependency on that repo.
 
 > Readers with access can explore those repositories to build more accurately as the product evolves.
 
