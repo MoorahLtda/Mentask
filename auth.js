@@ -29,7 +29,7 @@ window.MORAH_AUTH_CONFIG = {
   // Preencher quando o domínio do Hosted UI e os provedores estiverem configurados.
   // Ex.: 'morah-auth.auth.sa-east-1.amazoncognito.com'
   hostedUiDomain: '',
-  oauthRedirect: '',          // ex.: 'https://4him-technology.github.io/Morah/ui_kits/tecnico/'
+  oauthRedirect: '',          // ex.: 'https://moorahltda.github.io/Mentask/ui_kits/tecnico/'
   oauthScopes: 'openid email profile',
 };
 
