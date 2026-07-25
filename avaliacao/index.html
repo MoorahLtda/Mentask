@@ -129,7 +129,9 @@
 
   const total = Q.secoes.length;
 
-  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  // Escapa também aspas: o valor entra em contexto de atributo (value="…", data-f="…"),
+  // onde textContent→innerHTML sozinho não neutraliza " (self-XSS via campo Setor). Auditoria B3.
+  function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML.replace(/"/g, '&quot;'); }
 
   function setProgress() {
     const el = document.getElementById('progress');
@@ -266,12 +268,32 @@
         });
         if (falta) { falta.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
       }
-      if (etapa === total - 1) enviar();
+      if (etapa === total - 1) enviar(this);
       else { etapa += 1; render(); }
     };
   }
 
-  function enviar() {
+  function limparErroEnvio() { const e = document.getElementById('erro-envio'); if (e) e.remove(); }
+
+  // Falha REAL de envio (modo convite+API): não mascarar como sucesso nem "salvar"
+  // num dispositivo que o RH nunca vê. Mostra o erro e (quando faz sentido) reabilita
+  // o botão para reenvio. Auditoria A1.
+  function falhaEnvio(btn, msg, bloqueado) {
+    if (btn) { btn.disabled = !!bloqueado; btn.textContent = 'Enviar respostas'; }
+    limparErroEnvio();
+    const div = document.createElement('div');
+    div.id = 'erro-envio';
+    div.className = 'nota';
+    div.style.borderLeft = '3px solid #E23D3D';
+    div.style.color = '#C43535';
+    div.textContent = msg + (bloqueado ? '' : ' Suas respostas continuam preenchidas — toque em "Enviar respostas" para tentar de novo.');
+    const nav = btn ? btn.closest('.navrow') : null;
+    if (nav && nav.parentNode) nav.parentNode.insertBefore(div, nav);
+    else app.appendChild(div);
+    div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function enviar(btn) {
     const payload = {
       versao: Q.versao,
       enviadoEm: new Date().toISOString(),
@@ -282,23 +304,36 @@
       fontesExposicao: followups,
       camposAbertos: textos,
     };
-    // Com convite + API: envia pela rota pública (resposta gravada desacoplada
-    // da identidade no servidor). Sem convite/API ou em falha: persiste local.
-    if (convite && window.MORAH_API) {
-      fetch(window.MORAH_API + '/q/' + encodeURIComponent(convite) + '/resposta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+    // Sem convite/API (demo/offline): persistir local e concluir é o fallback de design.
+    if (!(convite && window.MORAH_API)) { salvarLocal(payload); concluir(); return; }
+
+    // Modo real: o envio TEM que confirmar no servidor. Desabilita o botão no 1º clique
+    // (anti duplo-clique/duplicata — auditoria A5) e trata a falha de verdade (A1).
+    if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+    limparErroEnvio();
+    fetch(window.MORAH_API + '/q/' + encodeURIComponent(convite) + '/resposta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(function (r) {
+        return r.json().then(
+          function (d) { return { ok: r.ok, status: r.status, d: d }; },
+          function () { return { ok: r.ok, status: r.status, d: {} }; });
       })
-        .then(function (r) {
-          if (r.ok) { try { localStorage.setItem('morah-avaliacao-ok', '1'); } catch (e) {} concluir(); }
-          else { salvarLocal(payload); concluir(); }
-        })
-        .catch(function () { salvarLocal(payload); concluir(); });
-    } else {
-      salvarLocal(payload);
-      concluir();
-    }
+      .then(function (x) {
+        if (x.ok) { try { localStorage.setItem('morah-avaliacao-ok', '1'); } catch (e) {} concluir(); return; }
+        // 409 (já respondido) e 410 (campanha encerrada) são terminais: não adianta reenviar.
+        const terminal = x.status === 409 || x.status === 410;
+        const msg = x.status === 409 ? 'Este convite já foi respondido.'
+          : x.status === 410 ? 'Esta campanha foi encerrada.'
+          : (x.d && x.d.erro) ? x.d.erro
+          : 'Não foi possível enviar suas respostas agora.';
+        falhaEnvio(btn, msg, terminal);
+      })
+      .catch(function () {
+        falhaEnvio(btn, 'Sem conexão para enviar. Verifique a internet e tente novamente.', false);
+      });
   }
 
   function salvarLocal(payload) {

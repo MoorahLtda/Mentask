@@ -296,12 +296,25 @@ function RelatoriosScreen() {
 
   const M = window.MorahMotor;
   const aggLocal = React.useMemo(() => M.calcular(avaliacoes), [avaliacoes]);
-  const agg = modo === 'api' && aggApi ? aggApi : aggLocal;
+  // Auditoria A9: em modo API NUNCA cair no cálculo local (morah-avaliacoes = dados
+  // demo/offline). Sem agregado do servidor → estado vazio, não o demo. Assim o
+  // relatório e o laudo de uma sessão logada jamais exibem demonstração como real.
+  const aggVazio = { n: 0, kAnonimato: (M && M.K_ANONIMATO) || 5, amostraSuficiente: false, global: null, recortes: [] };
+  const agg = modo === 'api' ? (aggApi || aggVazio) : aggLocal;
 
-  // Última visão para o laudo (laudo.html lê daqui em ambos os modos)
+  // Última visão para o laudo/plano (lidos daqui). Marca ORIGEM (real/demo) e a EMPRESA
+  // do resultado: o laudo recusa emitir demo (A9) e "Sugerir ações" só usa se a empresa
+  // bater com a ativa (A8) — nada de plano da empresa A cair na empresa B.
   React.useEffect(() => {
-    try { if (agg && agg.n) sessionStorage.setItem('morah-ultimo-resultado', JSON.stringify(agg)); } catch (e) {}
-  }, [agg]);
+    try {
+      if (agg && agg.n) {
+        let empresaId = null;
+        try { empresaId = localStorage.getItem('morah-empresa-id'); } catch (e) {}
+        const marcado = Object.assign({}, agg, { _empresaId: empresaId || null, _origem: modo === 'api' ? 'real' : 'demo' });
+        sessionStorage.setItem('morah-ultimo-resultado', JSON.stringify(marcado));
+      }
+    } catch (e) {}
+  }, [agg, modo]);
 
   const gerarDemo = () => {
     const demo = M.gerarDemo();
@@ -973,6 +986,14 @@ function PlanoScreen() {
     let agg = null;
     try { agg = JSON.parse(sessionStorage.getItem('morah-ultimo-resultado') || 'null'); } catch (e) {}
     if (!agg || !agg.global) { setAviso('Abra a tela Relatórios primeiro — as sugestões nascem do último diagnóstico.'); return; }
+    // Auditoria A8: o resultado é uma chave de sessão única; se ele for de OUTRA empresa
+    // (viu a empresa A em Relatórios, trocou p/ B e clicou aqui), não gerar plano de A em B.
+    let empresaAtual = null;
+    try { empresaAtual = localStorage.getItem('morah-empresa-id'); } catch (e) {}
+    if (agg._empresaId && empresaAtual && agg._empresaId !== empresaAtual) {
+      setAviso('O último relatório aberto é de outra empresa. Abra a tela Relatórios desta empresa antes de sugerir ações.');
+      return;
+    }
     const existentes = new Set(lista.map((a) => a.titulo));
     const sugestoes = [];
     agg.global.bandeiras.forEach((b) => {
@@ -1310,6 +1331,7 @@ function EnvioScreen() {
       try {
         await window.MorahApi.chamar('POST', '/colaboradores', {
           nome: form.nome.trim(), email: form.email.trim() || null, telefone: form.fone.trim() || null,
+          setor: form.setor.trim() || null, // Auditoria M3: enviar o setor (o back resolve/cria por nome)
         });
         await carregarApi();
         setForm({ nome: '', email: '', fone: '', setor: '' });
@@ -1463,12 +1485,14 @@ function CobrancaScreen() {
       const emp = empresas.find((e) => e.razao_social === form.empresa);
       if (!emp) { setErro('Selecione a empresa da fatura.'); return; }
       try {
-        await window.MorahApi.chamar('POST', '/faturas', {
+        const resp = await window.MorahApi.chamar('POST', '/faturas', {
           empresa_id: emp.id, descricao: form.descricao.trim(), valor: Number(form.valor),
           vencimento: form.vencimento || null, link_pagamento: form.link.trim() || null,
         });
         await carregar();
         setForm({ empresa: '—', descricao: '', valor: '', vencimento: '', link: '' });
+        // Backend gera a cobrança no Asaas quando configurado; se não gerou, mostra o porquê.
+        if (resp && resp.aviso) setErro(resp.aviso);
       } catch (e) { setErro(e.message); }
       return;
     }

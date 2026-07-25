@@ -66,7 +66,9 @@ window.MorahMotor = (function () {
   }
 
   function nivelMoorah(indice) {
-    return indice > 2.66 ? 'critico' : indice > 1.33 ? 'atencao' : 'adequado';
+    // Cortes documentados (tercis da escala 0–4): atenção >=1,33, crítico >=2,67 —
+    // coerente com a bandeira B12 (>=2,67). Antes era >2,66 (inconsistente). Auditoria B1.
+    return indice >= 2.67 ? 'critico' : indice >= 1.33 ? 'atencao' : 'adequado';
   }
 
   function pct(parte, todo) { return todo ? Math.round((parte / todo) * 100) : 0; }
@@ -139,6 +141,9 @@ window.MorahMotor = (function () {
       avs.forEach(function (av) {
         const r = av.respostas && av.respostas[itemId];
         if (!r) return;
+        // "Prefiro não responder" (e v:null) = não-resposta: fora do denominador,
+        // senão dilui a bandeira (ex.: afastamento D5 subestimado). Auditoria A7.
+        if (r.t === 'Prefiro não responder' || r.v === null || r.v === undefined) return;
         base++;
         if (textos.indexOf(r.t) >= 0) conta++;
       });

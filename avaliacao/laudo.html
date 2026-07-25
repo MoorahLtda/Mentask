@@ -121,7 +121,14 @@
     '<div class="campo"><b>Emissão</b>' + hoje + '</div>' +
     '</div>';
 
-  if (!agg.amostraSuficiente) {
+  // Auditoria A9: laudo NÃO pode ser emitido sobre dados de demonstração. O agregado
+  // carrega a origem (_origem: 'real' vindo da API | 'demo' do cálculo local). Sem marca
+  // 'real', tratamos como demonstração e avisamos de forma inequívoca (não emitir).
+  if (agg._origem !== 'real') {
+    html += '<div class="nota aviso-amostra" style="border-left:4px solid #E23D3D;background:#FCEBEB;color:#8A1F1F;font-weight:700;">' +
+      '⚠ LAUDO EM MODO DEMONSTRAÇÃO — gerado a partir de dados sintéticos/locais, NÃO válido para emissão oficial. ' +
+      'A emissão para o PGR exige respostas reais de uma campanha (origem verificada no servidor).</div>';
+  } else if (!agg.amostraSuficiente) {
     html += '<div class="nota aviso-amostra">⚠ Amostra inferior a ' + agg.kAnonimato + ' respondentes — este laudo está em modo de teste/demonstração. Para emissão oficial, é exigido o mínimo de ' + agg.kAnonimato + ' respostas (k-anonimato).</div>';
   }
 
