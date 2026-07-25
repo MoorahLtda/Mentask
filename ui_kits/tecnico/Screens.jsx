@@ -356,8 +356,13 @@ function RelatoriosScreen() {
   }
 
   // Recorte selecionado (k-anonimato aplicado pelo motor)
-  const opcoes = ['Todos os setores', ...agg.recortes.map((r) => r.setor + (r.suficiente ? '' : ' (n<' + agg.kAnonimato + ' — oculto)'))];
-  const recSel = agg.recortes.find((r) => recorte.indexOf(r.setor) === 0);
+  // O rótulo da opção é gerado UMA vez e usado tanto na lista quanto na seleção,
+  // para casar EXATO. Antes o match era por prefixo (recorte.indexOf(r.setor)===0):
+  // com setores como "Produção" e "Produção Norte", selecionar um podia trazer o
+  // resultado do outro — dado errado no relatório e, por tabela, no laudo. Auditoria M5.
+  const rotuloRecorte = (r) => r.setor + (r.suficiente ? '' : ' (n<' + agg.kAnonimato + ' — oculto)');
+  const opcoes = ['Todos os setores', ...agg.recortes.map(rotuloRecorte)];
+  const recSel = agg.recortes.find((r) => rotuloRecorte(r) === recorte);
   const bloqueado = recSel && !recSel.suficiente;
   const res = recSel && recSel.suficiente ? recSel.resultado : agg.global;
   const nExibido = recSel && recSel.suficiente ? recSel.n : agg.n;
@@ -1441,7 +1446,7 @@ function EnvioScreen() {
           sem nunca vincular a resposta à pessoa: os relatórios são sempre agregados (mínimo 5 respondentes por recorte).
           Nesta fase de teste, os botões abrem o WhatsApp/e-mail com a mensagem pronta; com a integração AWS,
           o disparo passa a ser automático (Amazon SES) e o status "Respondido" é atualizado em tempo real.
-          Questionário Moorah v1.0 — 75 itens · núcleo COPSOQ II-Br + módulos Moorah · 15 a 20 minutos.
+          Questionário Moorah v1.0 — 74 itens · núcleo COPSOQ II-Br + módulos Moorah · 15 a 20 minutos.
         </div>
       </PanelCard>
     </div>

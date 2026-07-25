@@ -117,7 +117,9 @@
     '<div class="campo"><b>CNPJ</b><span contenteditable="true">[00.000.000/0000-00]</span></div>' +
     '<div class="campo"><b>Período de aplicação</b><span contenteditable="true">' + hoje + '</span></div>' +
     '<div class="campo"><b>Respondentes</b>' + agg.n + ' trabalhador(es)</div>' +
-    '<div class="campo"><b>Instrumento</b>Questionário Moorah v1.0 (núcleo COPSOQ II-Br, 40 itens + 35 indicadores complementares)</div>' +
+    // Contagem conferida no questionario.js: A=40 (núcleo) + B17+C6+D5+E4+F2 = 34 → 74 itens.
+    // Dizia "35 complementares" (auditoria B4) — número errado num documento técnico do PGR.
+    '<div class="campo"><b>Instrumento</b>Questionário Moorah v1.0 (núcleo COPSOQ II-Br, 40 itens + 34 indicadores complementares)</div>' +
     '<div class="campo"><b>Emissão</b>' + hoje + '</div>' +
     '</div>';
 

@@ -23,7 +23,17 @@
       const u = await window.MorahAuth.requireAuth();
       if (u) window.MORAH_USER = u;
       return u;
-    } catch (e) { return null; /* SDK indisponível: mantém a página (fase de teste) */ }
+    } catch (e) {
+      // FAIL-CLOSED (auditoria A3): se a sessão não pôde sequer ser verificada — SDK do
+      // Cognito bloqueada, CDN fora do ar, MITM —, o painel NÃO pode renderizar. Antes
+      // o catch "mantinha a página" e o App assumia perfil 'rh', ou seja, bastava
+      // bloquear um script para a área logada aparecer sem sessão. Volta ao login.
+      try {
+        var cfg = window.MORAH_AUTH_CONFIG;
+        if (cfg && cfg.loginUrl) window.location.replace(cfg.loginUrl);
+      } catch (e2) { /* sem como redirecionar: ao menos não devolve usuário */ }
+      return null;
+    }
   })();
 </script>
 <script src="../../_ds_bundle.js"></script>

@@ -339,7 +339,13 @@
   function salvarLocal(payload) {
     try {
       const arr = JSON.parse(localStorage.getItem('morah-avaliacoes') || '[]');
-      arr.push(payload);
+      // Grava a resposta SEM o token do convite (auditoria M8): guardar os dois juntos
+      // religa resposta ↔ pessoa no próprio dispositivo, quebrando o anonimato que o
+      // servidor garante. O token segue disponível em `payload.convite` só para marcar
+      // o convite como respondido no modo demo, logo abaixo — mas não é persistido aqui.
+      const semToken = Object.assign({}, payload);
+      delete semToken.convite;
+      arr.push(semToken);
       localStorage.setItem('morah-avaliacoes', JSON.stringify(arr));
       localStorage.setItem('morah-avaliacao-ok', '1');
       // Demo (mesmo navegador): marca o convite como respondido no painel do técnico.
