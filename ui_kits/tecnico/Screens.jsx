@@ -19,6 +19,18 @@ function chaveEmpresa(base) {
   return k;
 }
 
+// Datas 'YYYY-MM-DD' do banco como data LOCAL (auditoria B2). `new Date('2026-07-26')`
+// é interpretado como UTC: em UTC-3 vira 25/07 21:00 local, então prazo e vencimento
+// apareciam como VENCIDOS no próprio dia do vencimento — informação errada na cara do
+// cliente (Plano de Ação e Cobrança).
+function dataLocal(s) {
+  if (!s) return null;
+  const p = String(s).slice(0, 10).split('-').map(Number);
+  if (p.length !== 3 || p.some((n) => isNaN(n))) return null;
+  return new Date(p[0], p[1] - 1, p[2]);
+}
+function hojeLocal() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+
 function PanelCard({ children, style }) {
   return (
     <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)', padding: 'var(--space-6)', ...style }}>{children}</div>
@@ -1035,7 +1047,7 @@ function PlanoScreen() {
     salvarLocal(lista.filter((x) => x.id !== a.id));
   };
 
-  const vencida = (a) => a.prazo && a.status !== 'concluida' && new Date(a.prazo) < new Date(new Date().toDateString());
+  const vencida = (a) => { const p = dataLocal(a.prazo); return !!p && a.status !== 'concluida' && p < hojeLocal(); };
   const fmtData = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : 'sem prazo');
   const pendentes = lista.filter((a) => a.status !== 'concluida').length;
   const vencidas = lista.filter(vencida).length;
@@ -1111,6 +1123,7 @@ function PendentesScreen() {
     try { return localStorage.getItem('morah-avaliacao-ok') === '1'; } catch (e) { return false; }
   });
   const [convitesApi, setConvitesApi] = React.useState(null); // null = demo/local
+  const [erroApi, setErroApi] = React.useState(null);         // sessão real que falhou
   const url = new URL('../../avaliacao/', window.location.href).href;
 
   // Sessão real: convites verdadeiros deste colaborador vêm da API
@@ -1120,7 +1133,15 @@ function PendentesScreen() {
         if (!window.MorahApi) return;
         const r = await window.MorahApi.chamar('GET', '/meus-convites');
         setConvitesApi(r);
-      } catch (e) { /* demo → card local */ }
+      } catch (e) {
+        // SEM_JWT / SEM_API = modo demonstração: o card local é legítimo.
+        // Qualquer OUTRO erro é sessão real que falhou (403, rede, 500). Antes tudo caía
+        // no mesmo card demo, que abre o questionário SEM token: o trabalhador respondia
+        // as 74 perguntas e a resposta ficava só no aparelho dele — invisível para o RH,
+        // e ele saía com a impressão de ter participado. Auditoria M14.
+        if (e && (e.code === 'SEM_JWT' || e.code === 'SEM_API')) return;
+        setErroApi((e && e.message) ? e.message : 'não foi possível carregar seus questionários');
+      }
     })();
   }, []);
 
@@ -1142,7 +1163,13 @@ function PendentesScreen() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-      {convitesApi !== null ? (
+      {erroApi ? (
+        <PanelCard style={{ padding: 0 }}>
+          <EmptyState icon="alert-triangle" title="Não foi possível carregar seus questionários"
+            sub={'Detalhe: ' + erroApi + '. Atualize a página; se o problema continuar, avise o RH da sua empresa. '
+              + 'Não responda por um link genérico — sem o convite individual a resposta não é contabilizada.'} />
+        </PanelCard>
+      ) : convitesApi !== null ? (
         convitesApi.length === 0
           ? <PanelCard style={{ padding: 0 }}><EmptyState icon="check-circle" title="Nenhum questionário pendente" sub="Quando o RH enviar uma nova avaliação, ela aparecerá aqui." /></PanelCard>
           : convitesApi.map((cv) => (
@@ -1323,8 +1350,11 @@ function EnvioScreen() {
     const r = await window.MorahApi.chamar('POST', '/campanhas/' + cp.id + '/convites', { colaboradorIds: [c.id] });
     await carregarApi();
     if (r.emails_enviados > 0) setAviso('Convite enviado por e-mail pela plataforma para ' + c.nome.split(' ')[0] + '.');
-    const convites = await window.MorahApi.chamar('GET', '/campanhas/' + cp.id + '/convites');
-    const cv = convites.find((x) => x.nome === c.nome && (x.email || '') === (c.email || ''));
+    // Busca o link do convite DESTE colaborador pelo id (auditoria M2): antes procurava
+    // na listagem por nome+e-mail, então dois homônimos sem e-mail trocavam de token e
+    // de status. E a listagem deixou de trazer o token (auditoria A2) — o link agora vem
+    // do endpoint individual, só nesta ação explícita de envio.
+    const cv = await window.MorahApi.chamar('GET', '/campanhas/' + cp.id + '/convites/' + c.id + '/link');
     return cv ? cv.token : null;
   };
 
@@ -1516,7 +1546,7 @@ function CobrancaScreen() {
 
   const moeda = (v) => 'R$ ' + Number(v || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   const fmtData = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—');
-  const vencida = (f) => f.status === 'pendente' && f.vencimento && new Date(f.vencimento) < new Date(hoje.toDateString());
+  const vencida = (f) => { const v = dataLocal(f.vencimento); return f.status === 'pendente' && !!v && v < hojeLocal(); };
   const pendentes = lista.filter((f) => f.status === 'pendente');
   const totalPendente = pendentes.reduce((a, f) => a + Number(f.valor || 0), 0);
 
