@@ -658,7 +658,17 @@ function TermosScreen() {
         setModo('api');
         setAceite(r.find((a) => a.versao === VERSAO) || null);
       } catch (e) {
-        try { setAceite(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch (e2) {}
+        // Auditoria M7: SÓ o modo demonstração (SEM_JWT/SEM_API) pode cair no
+        // localStorage. Uma falha transitória do GET numa sessão REAL não pode rebaixar
+        // a tela para 'local' — o aceite (data + versão) é registro de compliance e
+        // precisa chegar ao servidor. Antes, o aceite era gravado só no navegador e
+        // ninguém percebia. Aqui mantemos o modo 'api' e avisamos.
+        if (e && (e.code === 'SEM_JWT' || e.code === 'SEM_API')) {
+          try { setAceite(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch (e2) {}
+          return;
+        }
+        setModo('api');
+        setErro('Não foi possível carregar o status do aceite (' + (e.message || 'erro') + '). Você ainda pode aceitar — o registro será enviado ao servidor.');
       }
     })();
   }, []);
@@ -1389,32 +1399,70 @@ function EnvioScreen() {
   };
 
   const mensagem = (c, token) => 'Olá, ' + c.nome.split(' ')[0] + '! Você foi convidado(a) a responder a Avaliação do Ambiente de Trabalho da sua empresa. É anônima e leva cerca de 15 minutos. Acesse: ' + baseUrl + '?t=' + token;
+  // Auditoria M4: o navegador só honra window.open enquanto dura o gesto do usuário.
+  // Como buscar o convite na API leva vários awaits, o popup era bloqueado em silêncio
+  // e o técnico ficava achando que tinha enviado. Solução: abrir a aba JÁ no clique
+  // (em branco) e só depois apontar a URL. Se ainda assim vier bloqueada, mostramos o
+  // link para envio manual, em vez de não fazer nada.
+  const abrirAbaAgora = () => {
+    let w = null;
+    try { w = window.open('', '_blank'); } catch (e) { w = null; }
+    return {
+      ir(url) {
+        if (w && !w.closed) { try { w.location.href = url; return true; } catch (e) { /* cai no fallback */ } }
+        return false;
+      },
+      fechar() { if (w && !w.closed) { try { w.close(); } catch (e) {} } },
+    };
+  };
+  const erroConvite = 'Não foi possível gerar o convite deste colaborador. Tente novamente em instantes.';
+
   const viaWhats = async (c) => {
-    const token = modo === 'api' ? await garantirConvite(c) : c.token;
-    if (!token) return;
-    const d = c.fone.replace(/\D/g, '');
-    const n = d.length <= 11 ? '55' + d : d;
-    window.open('https://wa.me/' + n + '?text=' + encodeURIComponent(mensagem(c, token)), '_blank');
-    if (modo === 'local' && c.status === 'nao') marcar(c, 'env');
+    const aba = abrirAbaAgora(); // ANTES de qualquer await
+    try {
+      const token = modo === 'api' ? await garantirConvite(c) : c.token;
+      if (!token) { aba.fechar(); setErro(erroConvite); return; }
+      const d = (c.fone || '').replace(/\D/g, '');
+      const n = d.length <= 11 ? '55' + d : d;
+      const url = 'https://wa.me/' + n + '?text=' + encodeURIComponent(mensagem(c, token));
+      if (!aba.ir(url)) setAviso('O navegador bloqueou a abertura do WhatsApp. Abra este link manualmente: ' + url);
+      if (modo === 'local' && c.status === 'nao') marcar(c, 'env');
+    } catch (e) { aba.fechar(); setErro(e.message || erroConvite); }
   };
+
   const viaEmail = async (c) => {
-    if (modo === 'api') {
-      const jaTinha = !!c.token;
-      const token = await garantirConvite(c);
-      // convite novo: a plataforma já enviou via SES; reenvio manual abre o e-mail pronto
-      if (jaTinha && token) {
-        window.open('mailto:' + c.email + '?subject=' + encodeURIComponent('Avaliação do Ambiente de Trabalho — sua participação é importante') + '&body=' + encodeURIComponent(mensagem(c, token)));
+    const assunto = encodeURIComponent('Avaliação do Ambiente de Trabalho — sua participação é importante');
+    // mailto é navegação (handoff para o cliente de e-mail), não popup: pode ir depois
+    // do await sem ser bloqueado. Usamos location.href em vez de window.open.
+    try {
+      if (modo === 'api') {
+        const jaTinha = !!c.token;
+        const token = await garantirConvite(c);
+        if (!token) { setErro(erroConvite); return; }
+        // convite novo: a plataforma já disparou via SES; reenvio manual abre o e-mail pronto
+        if (jaTinha) window.location.href = 'mailto:' + c.email + '?subject=' + assunto + '&body=' + encodeURIComponent(mensagem(c, token));
+        return;
       }
-      return;
-    }
-    window.open('mailto:' + c.email + '?subject=' + encodeURIComponent('Avaliação do Ambiente de Trabalho — sua participação é importante') + '&body=' + encodeURIComponent(mensagem(c, c.token)));
-    if (c.status === 'nao') marcar(c, 'env');
+      window.location.href = 'mailto:' + c.email + '?subject=' + assunto + '&body=' + encodeURIComponent(mensagem(c, c.token));
+      if (c.status === 'nao') marcar(c, 'env');
+    } catch (e) { setErro(e.message || erroConvite); }
   };
+
   const copiarLink = async (c) => {
-    const token = modo === 'api' ? await garantirConvite(c) : c.token;
-    if (!token) return;
-    navigator.clipboard.writeText(baseUrl + '?t=' + token);
-    if (modo === 'local' && c.status === 'nao') marcar(c, 'env');
+    try {
+      const token = modo === 'api' ? await garantirConvite(c) : c.token;
+      if (!token) { setErro(erroConvite); return; }
+      const url = baseUrl + '?t=' + token;
+      // A área de transferência também exige gesto recente; depois do await o navegador
+      // pode recusar. Se recusar, entregamos o link na tela para copiar à mão. (M4)
+      try {
+        await navigator.clipboard.writeText(url);
+        setAviso('Link do convite copiado.');
+      } catch (e) {
+        setAviso('Não foi possível copiar automaticamente. Link do convite: ' + url);
+      }
+      if (modo === 'local' && c.status === 'nao') marcar(c, 'env');
+    } catch (e) { setErro(e.message || erroConvite); }
   };
 
   const StatusBadge = ({ s }) => (
