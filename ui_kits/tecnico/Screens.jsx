@@ -1398,6 +1398,22 @@ function EnvioScreen() {
     salvar(lista.filter((x) => x.id !== c.id));
   };
 
+  // Auditoria A4: libera o acesso do colaborador ao painel (Questionários Pendentes +
+  // Canal de Denúncias). É OPCIONAL e por pessoa — responder o questionário continua
+  // anônimo e sem login, pelo token do convite. Só faz sentido em sessão real, porque
+  // cria usuário no Cognito.
+  const liberarAcesso = async (c) => {
+    if (modo !== 'api') { setAviso('Liberar acesso ao painel exige sessão real — não funciona no modo demonstração.'); return; }
+    setErro(''); setAviso('');
+    try {
+      const r = await window.MorahApi.chamar('POST', '/colaboradores/' + c.id + '/acesso');
+      await carregarApi();
+      setAviso(r.ja_tinha_acesso
+        ? c.nome.split(' ')[0] + ' já tinha acesso ao painel.'
+        : 'Acesso criado para ' + r.email + '. A senha temporária vai por e-mail; no primeiro login o sistema pede a troca.');
+    } catch (e) { setErro(e.message); }
+  };
+
   const mensagem = (c, token) => 'Olá, ' + c.nome.split(' ')[0] + '! Você foi convidado(a) a responder a Avaliação do Ambiente de Trabalho da sua empresa. É anônima e leva cerca de 15 minutos. Acesse: ' + baseUrl + '?t=' + token;
   // Auditoria M4: o navegador só honra window.open enquanto dura o gesto do usuário.
   // Como buscar o convite na API leva vários awaits, o popup era bloqueado em silêncio
@@ -1510,6 +1526,12 @@ function EnvioScreen() {
                 {c.fone ? <Button size="sm" variant="leaf" iconLeft="message-circle" onClick={() => viaWhats(c)}>WhatsApp</Button> : null}
                 {c.email ? <Button size="sm" variant="secondary" iconLeft="mail" onClick={() => viaEmail(c)}>E-mail</Button> : null}
                 <Button size="sm" variant="ghost" iconLeft="copy" onClick={() => copiarLink(c)}>Link</Button>
+                {/* Acesso ao painel (A4): só em sessão real e só se houver e-mail */}
+                {c.cognito_sub
+                  ? <Badge tone="info">Tem acesso</Badge>
+                  : (modo === 'api' && c.email
+                      ? <Button size="sm" variant="ghost" iconLeft="key" onClick={() => liberarAcesso(c)}>Dar acesso</Button>
+                      : null)}
                 <Button size="sm" variant="ghost" iconLeft="trash-2" style={{ color: 'var(--critical-500)' }} onClick={() => remover(c)} />
               </div>
             ))}
