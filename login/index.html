@@ -6,8 +6,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Moorah — Entrar</title>
 <link rel="stylesheet" href="../styles.css">
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js"></script>
+<!-- SRI obrigatório nesta página: é aqui que a senha é digitada e processada (SRP pela
+     SDK do Cognito). Sem `integrity`, um CDN comprometido ou um MITM serviria JS
+     arbitrário com acesso ao campo de senha. O lucide também saiu de `@latest` (versão
+     móvel = conteúdo imprevisível) para versão fixa. Auditoria M18.
+     Ao atualizar a versão, recalcular: openssl dgst -sha384 -binary arquivo | openssl base64 -A -->
+<script src="https://unpkg.com/lucide@1.27.0/dist/umd/lucide.min.js" integrity="sha384-iGjGimQxA1QCAbLRiSWPFc+KsjPW3kLS/2Cub+yRgYfd4EUEx/dxoJ0MKyEsbjop" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js" integrity="sha384-YkDOkBg8dBira7f28t9KbD0tG5OnnuU540fRBz8JgorAXLJOwtakyHNV7m36RDG4" crossorigin="anonymous"></script>
 <style>
   html, body { height: 100%; margin: 0; }
   body { font-family: var(--font-body); color: var(--text-strong); background: var(--surface-card); }
