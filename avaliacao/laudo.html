@@ -214,9 +214,44 @@
     '<div class="linha"><span contenteditable="true">[Local]</span>, ' + hoje + '</div>' +
     '</div>';
 
+  // Selo de integridade (SHA-256) do conjunto de dados que sustenta este laudo.
+  // Serve para o auditor/fiscal conferir que o documento corresponde exatamente àquele
+  // agregado: qualquer alteração num número muda o hash. Cobre o resultado global, os
+  // recortes e o n — NÃO cobre os campos editáveis (nome do responsável, conclusão),
+  // que são preenchidos pelo profissional depois da emissão.
+  html += '<div class="nota" style="margin-top:18px;font-family:monospace;font-size:10px;">' +
+    '<b>Selo de integridade (SHA-256):</b> <span id="selo">calculando…</span>' +
+    '<br>Confere o conjunto de dados agregados deste laudo (resultado global, recortes e nº de respondentes). ' +
+    'Qualquer alteração nos números produz um selo diferente.</div>';
+
   html += '<div class="rodape"><span>Plataforma Moorah · Questionário Moorah v1.0 · dados anônimos e agregados</span><span>Emitido em ' + hoje + '</span></div>';
 
   el.innerHTML = html;
+
+  (function selarIntegridade() {
+    var alvo = document.getElementById('selo');
+    if (!alvo) return;
+    // Base canônica: ordem fixa de chaves, para o mesmo dado gerar sempre o mesmo hash.
+    var base = JSON.stringify({
+      instrumento: 'Questionario Moorah v1.0',
+      n: agg.n,
+      kAnonimato: agg.kAnonimato,
+      origem: agg._origem || 'demo',
+      global: agg.global,
+      recortes: agg.recortes,
+    });
+    if (!(window.crypto && window.crypto.subtle && window.TextEncoder)) {
+      alvo.textContent = 'indisponível neste navegador (exige conexão segura HTTPS)';
+      return;
+    }
+    window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(base)).then(function (buf) {
+      var hex = Array.prototype.map.call(new Uint8Array(buf), function (b) {
+        return ('0' + b.toString(16)).slice(-2);
+      }).join('');
+      // Agrupado de 8 em 8 para leitura/conferência manual
+      alvo.textContent = (hex.match(/.{1,8}/g) || [hex]).join(' ');
+    }).catch(function () { alvo.textContent = 'não foi possível calcular'; });
+  })();
 })();
 </script>
 </body>

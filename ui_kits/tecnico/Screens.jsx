@@ -113,7 +113,11 @@ function OverviewScreen() {
       try {
         if (!window.MorahApi || !window.MorahAuth) return;
         if (!(await window.MorahAuth.idToken())) return; // modo demo → KPIs mock
-        const perfil = (window.MORAH_USER || {}).perfil;
+        // Espera a resolução da sessão antes de ler o perfil (auditoria B7): este efeito
+        // roda com deps [] e window.MORAH_USER pode ainda não existir, fazendo o 1º KPI
+        // (Empresas vs Campanhas) sair errado até o usuário dar refresh.
+        const u = window.MORAH_USER_PROMISE ? await window.MORAH_USER_PROMISE : null;
+        const perfil = (u || window.MORAH_USER || {}).perfil;
         const [cols, cps] = await Promise.all([
           window.MorahApi.chamar('GET', '/colaboradores').catch(() => []),
           window.MorahApi.chamar('GET', '/campanhas').catch(() => []),
